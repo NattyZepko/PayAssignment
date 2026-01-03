@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 
-// Explain: We mock axios to control orchestrator responses and validate forwarding.
+// Explanation: We mock axios to control orchestrator responses and validate forwarding.
 jest.unstable_mockModule('axios', () => ({
     default: {
         post: jest.fn((url, payload) => {
@@ -24,7 +24,7 @@ describe('Merchant endpoints', () => {
         process.env.NODE_ENV = 'test';
     });
 
-    // Explain: /merchant/payments forwards payload, includes deviceData and idempotencyKey, and returns orchestrator response.
+    // Explanation: /merchant/payments forwards payload, includes deviceData and idempotencyKey, and returns orchestrator response.
     test('payments forwards to orchestrator and returns normalized', async () => {
         const res = await request(app).post('/merchant/payments').send({
             amount: '12.34',
@@ -41,7 +41,7 @@ describe('Merchant endpoints', () => {
         expect(res.body.deviceData).toBe('device-data');
     });
 
-    // Explain: /merchant/refunds forwards payload and returns orchestrator response.
+    // Explanation: /merchant/refunds forwards payload and returns orchestrator response.
     test('refunds forwards to orchestrator and returns normalized', async () => {
         const res = await request(app).post('/merchant/refunds').send({
             transactionId: 'bt_txn',
@@ -55,7 +55,29 @@ describe('Merchant endpoints', () => {
         expect(res.body.operation).toBe('refund');
     });
 
-    // Explain: /merchant/callback requires merchantReference; missing returns 400.
+    // Explanation: /merchant/callback requires merchantReference; missing returns 400.
+
+    // Explanation: /merchant/void forwards payload and returns orchestrator response.
+    test('void forwards to orchestrator and returns normalized', async () => {
+        const axiosModule = (await import('axios')).default;
+        axiosModule.post = jest.fn((url, payload) => {
+            if (url.endsWith('/orchestrator/void')) {
+                return Promise.resolve({ data: { ...payload, provider: 'braintree', operation: 'void', status: 'SUCCESS', transactionId: payload.transactionId } });
+            }
+            return Promise.reject(new Error('unknown'));
+        });
+
+        const res = await request(app).post('/merchant/void').send({
+            transactionId: 'tx123',
+            merchantReference: 'void_1',
+            idempotencyKey: 'uuid-void-1',
+            callbackUrl: 'http://localhost:3001/merchant/callback',
+        });
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('SUCCESS');
+        expect(res.body.operation).toBe('void');
+        expect(res.body.transactionId).toBe('tx123');
+    });
     test('callback missing merchantReference returns 400', async () => {
         const res = await request(app).post('/merchant/callback').send({ status: 'SUCCESS' });
         expect(res.status).toBe(400);

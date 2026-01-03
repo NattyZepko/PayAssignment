@@ -1,9 +1,13 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-import { sale, refund } from './braintree.js';
+import { sale, refund, voidTxn } from './braintree.js';
 import { get as idemGet, set as idemSet } from './idempotency.js';
 import { notify } from './notify.js';
+import { normalize } from './normalize.js';
+import { config } from './config.js';
+import { logger, genTraceId } from './logger.js';
+import { inc, getMetrics } from './metrics.js';
 
 dotenv.config();
 
@@ -11,7 +15,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3002;
+// simple trace id middleware
+app.use((req, _res, next) => {
+    req.traceId = req.headers['x-request-id'] || req.body?.idempotencyKey || genTraceId();
+    next();
+});
+
+const PORT = config.PORT;
 
 function required(body, fields) {
     for (const f of fields) {
@@ -22,34 +32,7 @@ function required(body, fields) {
     return null;
 }
 
-function normalize({ merchantReference, operation, amount, currency, btResult }) {
-    if (btResult?.success) {
-        const pendingStatuses = ['authorized', 'submitted_for_settlement', 'settling'];
-        const txnStatus = btResult.transaction?.status;
-        const normalizedStatus = pendingStatuses.includes(txnStatus) ? 'PENDING' : 'SUCCESS';
-        return {
-            merchantReference,
-            provider: 'braintree',
-            operation,
-            status: normalizedStatus,
-            transactionId: btResult.transaction?.id || null,
-            amount: amount ? String(amount) : btResult.transaction?.amount,
-            currency: currency || btResult.transaction?.currencyIsoCode || null,
-        };
-    }
-    const code = btResult?.transaction?.processorResponseCode || btResult?.errors?.deepErrors()?.[0]?.code || 'BT_ERROR';
-    const message = btResult?.transaction?.processorResponseText || btResult?.message || 'Unknown error';
-    return {
-        merchantReference,
-        provider: 'braintree',
-        operation,
-        status: 'FAILED',
-        transactionId: btResult?.transaction?.id || null,
-        amount: amount ? String(amount) : null,
-        currency: currency || null,
-        error: { code: String(code), message: String(message) },
-    };
-}
+// normalization moved to src/normalize.js
 
 app.post('/orchestrator/sale', async (req, res) => {
     const error = required(req.body, ['amount', 'currency', 'paymentMethodNonce', 'merchantReference', 'idempotencyKey']);
@@ -61,6 +44,8 @@ app.post('/orchestrator/sale', async (req, res) => {
     if (cached) return res.status(200).json(cached);
 
     try {
+        inc('sale_attempts');
+        logger.info({ traceId: req.traceId, merchantReference, idempotencyKey }, 'sale: calling braintree');
         let btResult;
         try {
             btResult = await sale({ amount, paymentMethodNonce, deviceData, submitForSettlement: true });
@@ -69,8 +54,10 @@ app.post('/orchestrator/sale', async (req, res) => {
             btResult = await sale({ amount, paymentMethodNonce, deviceData, submitForSettlement: true });
         }
         const normalized = normalize({ merchantReference, operation: 'sale', amount, currency, btResult });
+        logger.info({ traceId: req.traceId, merchantReference, result: { success: btResult?.success, id: btResult?.transaction?.id } }, 'sale: normalized');
         idemSet(idempotencyKey, normalized);
         if (callbackUrl) await notify(callbackUrl, normalized);
+        inc(btResult?.success ? 'sale_success' : 'sale_failed');
         res.status(200).json(normalized);
     } catch (e) {
         const normalized = {
@@ -85,6 +72,8 @@ app.post('/orchestrator/sale', async (req, res) => {
         };
         idemSet(idempotencyKey, normalized);
         if (callbackUrl) await notify(callbackUrl, normalized);
+        inc('sale_failed');
+        logger.error({ traceId: req.traceId, merchantReference, err: e.message }, 'sale: network error');
         res.status(502).json(normalized);
     }
 });
@@ -99,6 +88,8 @@ app.post('/orchestrator/refund', async (req, res) => {
     if (cached) return res.status(200).json(cached);
 
     try {
+        inc('refund_attempts');
+        logger.info({ traceId: req.traceId, merchantReference, idempotencyKey, transactionId }, 'refund: calling braintree');
         let btResult;
         try {
             btResult = await refund(transactionId, amount);
@@ -107,8 +98,10 @@ app.post('/orchestrator/refund', async (req, res) => {
             btResult = await refund(transactionId, amount);
         }
         const normalized = normalize({ merchantReference, operation: 'refund', amount, currency: null, btResult });
+        logger.info({ traceId: req.traceId, merchantReference, result: { success: btResult?.success, id: btResult?.transaction?.id } }, 'refund: normalized');
         idemSet(idempotencyKey, normalized);
         if (callbackUrl) await notify(callbackUrl, normalized);
+        inc(btResult?.success ? 'refund_success' : 'refund_failed');
         res.status(200).json(normalized);
     } catch (e) {
         const normalized = {
@@ -123,13 +116,62 @@ app.post('/orchestrator/refund', async (req, res) => {
         };
         idemSet(idempotencyKey, normalized);
         if (callbackUrl) await notify(callbackUrl, normalized);
+        inc('refund_failed');
+        logger.error({ traceId: req.traceId, merchantReference, err: e.message }, 'refund: network error');
         res.status(502).json(normalized);
     }
 });
 
+app.post('/orchestrator/void', async (req, res) => {
+    const error = required(req.body, ['transactionId', 'merchantReference', 'idempotencyKey']);
+    if (error) return res.status(400).json({ error });
+
+    const { transactionId, merchantReference, idempotencyKey, callbackUrl } = req.body;
+
+    const cached = idemGet(idempotencyKey);
+    if (cached) return res.status(200).json(cached);
+
+    try {
+        inc('void_attempts');
+        logger.info({ traceId: req.traceId, merchantReference, idempotencyKey, transactionId }, 'void: calling braintree');
+        let btResult;
+        try {
+            btResult = await voidTxn(transactionId);
+        } catch (firstErr) {
+            btResult = await voidTxn(transactionId);
+        }
+        const normalized = normalize({ merchantReference, operation: 'void', amount: null, currency: null, btResult });
+        logger.info({ traceId: req.traceId, merchantReference, result: { success: btResult?.success, id: btResult?.transaction?.id } }, 'void: normalized');
+        idemSet(idempotencyKey, normalized);
+        if (callbackUrl) await notify(callbackUrl, normalized);
+        inc(btResult?.success ? 'void_success' : 'void_failed');
+        res.status(200).json(normalized);
+    } catch (e) {
+        const normalized = {
+            merchantReference,
+            provider: 'braintree',
+            operation: 'void',
+            status: 'FAILED',
+            transactionId: transactionId || null,
+            amount: null,
+            currency: null,
+            error: { code: 'BT_NETWORK', message: e.message || 'Network/timeout' },
+        };
+        idemSet(idempotencyKey, normalized);
+        if (callbackUrl) await notify(callbackUrl, normalized);
+        inc('void_failed');
+        logger.error({ traceId: req.traceId, merchantReference, err: e.message }, 'void: network error');
+        res.status(502).json(normalized);
+    }
+});
+
+app.get('/orchestrator/metrics', (_req, res) => {
+    res.status(200).json(getMetrics());
+});
+
 if (process.env.NODE_ENV !== 'test') {
     app.listen(PORT, () => {
-        console.log(`Payment Orchestrator listening on http://localhost:${PORT}`);
+        logger.info(`Payment Orchestrator listening on http://localhost:${PORT}`);
     });
 }
 

@@ -1,13 +1,11 @@
-import dotenv from 'dotenv';
 import braintree from 'braintree';
-
-dotenv.config();
+import { config } from './config.js';
 
 export const gateway = new braintree.BraintreeGateway({
     environment: braintree.Environment.Sandbox,
-    merchantId: process.env.BRAINTREE_MERCHANT_ID,
-    publicKey: process.env.BRAINTREE_PUBLIC_KEY,
-    privateKey: process.env.BRAINTREE_PRIVATE_KEY,
+    merchantId: config.BRAINTREE_MERCHANT_ID,
+    publicKey: config.BRAINTREE_PUBLIC_KEY,
+    privateKey: config.BRAINTREE_PRIVATE_KEY,
 });
 
 export async function sale({ amount, paymentMethodNonce, deviceData, submitForSettlement = true }) {
@@ -24,4 +22,8 @@ export async function refund(transactionId, amount) {
         return gateway.transaction.refund(String(transactionId), String(amount));
     }
     return gateway.transaction.refund(String(transactionId));
+}
+
+export async function voidTxn(transactionId) {
+    return gateway.transaction.void(String(transactionId));
 }

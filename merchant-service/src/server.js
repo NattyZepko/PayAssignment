@@ -3,15 +3,22 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import axios from 'axios';
 import { saveStatus, getStatus } from './store.js';
+import { config } from './config.js';
+import { logger, genTraceId } from './logger.js';
+import { inc, getMetrics } from './metrics.js';
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use((req, _res, next) => {
+    req.traceId = req.headers['x-request-id'] || req.body?.idempotencyKey || genTraceId();
+    next();
+});
 
-const PORT = process.env.PORT || 3001;
-const ORCHESTRATOR_BASE_URL = process.env.ORCHESTRATOR_BASE_URL || 'http://localhost:3002';
+const PORT = config.PORT;
+const ORCHESTRATOR_BASE_URL = config.ORCHESTRATOR_BASE_URL;
 
 function required(body, fields) {
     for (const f of fields) {
@@ -41,9 +48,11 @@ app.post('/merchant/payments', async (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             timeout: 15000,
         });
+        logger.info({ traceId: req.traceId, merchantReference: payload.merchantReference }, 'forwarded sale');
         res.status(200).json(resp.data);
     } catch (err) {
         const status = err.response?.status || 500;
+        logger.error({ traceId: req.traceId, err: err.message }, 'forwarding sale failed');
         res.status(status).json({ error: err.response?.data?.error || 'Forwarding failed' });
     }
 });
@@ -65,6 +74,31 @@ app.post('/merchant/refunds', async (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             timeout: 15000,
         });
+        logger.info({ traceId: req.traceId, merchantReference: payload.merchantReference }, 'forwarded refund');
+        res.status(200).json(resp.data);
+    } catch (err) {
+        const status = err.response?.status || 500;
+        logger.error({ traceId: req.traceId, err: err.message }, 'forwarding refund failed');
+        res.status(status).json({ error: err.response?.data?.error || 'Forwarding failed' });
+    }
+});
+
+app.post('/merchant/void', async (req, res) => {
+    const error = required(req.body, ['transactionId', 'merchantReference']);
+    if (error) return res.status(400).json({ error });
+
+    const payload = {
+        transactionId: req.body.transactionId,
+        merchantReference: req.body.merchantReference,
+        callbackUrl: req.body.callbackUrl || `http://localhost:${PORT}/merchant/callback`,
+        idempotencyKey: req.body.idempotencyKey || req.headers['x-idempotency-key'] || cryptoRandom(),
+    };
+
+    try {
+        const resp = await axios.post(`${ORCHESTRATOR_BASE_URL}/orchestrator/void`, payload, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 15000,
+        });
         res.status(200).json(resp.data);
     } catch (err) {
         const status = err.response?.status || 500;
@@ -76,13 +110,19 @@ app.post('/merchant/callback', (req, res) => {
     const body = req.body || {};
     if (!body.merchantReference) return res.status(400).json({ error: 'Missing merchantReference' });
     saveStatus(body.merchantReference, body);
+    inc('callbacks_received');
+    logger.info({ traceId: req.traceId, merchantReference: body.merchantReference, status: body.status }, 'callback received');
     res.status(200).json({ received: true });
 });
 
 app.get('/merchant/status/:merchantReference', (req, res) => {
     const status = getStatus(req.params.merchantReference);
     if (!status) return res.status(404).json({ error: 'Not found' });
+    inc('status_queries');
     res.status(200).json(status);
+});
+app.get('/merchant/metrics', (_req, res) => {
+    res.status(200).json(getMetrics());
 });
 
 function cryptoRandom() {
@@ -91,7 +131,7 @@ function cryptoRandom() {
 
 if (process.env.NODE_ENV !== 'test') {
     app.listen(PORT, () => {
-        console.log(`Merchant Service listening on http://localhost:${PORT}`);
+        logger.info(`Merchant Service listening on http://localhost:${PORT}`);
     });
 }
 

@@ -1,36 +1,6 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import request from 'supertest';
+import { normalize } from '../src/normalize.js';
 
-function normalize({ merchantReference, operation, amount, currency, btResult }) {
-    if (btResult?.success) {
-        const pendingStatuses = ['authorized', 'submitted_for_settlement', 'settling'];
-        const txnStatus = btResult.transaction?.status;
-        const normalizedStatus = pendingStatuses.includes(txnStatus) ? 'PENDING' : 'SUCCESS';
-        return {
-            merchantReference,
-            provider: 'braintree',
-            operation,
-            status: normalizedStatus,
-            transactionId: btResult.transaction?.id || null,
-            amount: amount ? String(amount) : btResult.transaction?.amount,
-            currency: currency || btResult.transaction?.currencyIsoCode || null,
-        };
-    }
-    const code = btResult?.transaction?.processorResponseCode || btResult?.errors?.deepErrors()?.[0]?.code || 'BT_ERROR';
-    const message = btResult?.transaction?.processorResponseText || btResult?.message || 'Unknown error';
-    return {
-        merchantReference,
-        provider: 'braintree',
-        operation,
-        status: 'FAILED',
-        transactionId: btResult?.transaction?.id || null,
-        amount: amount ? String(amount) : null,
-        currency: currency || null,
-        error: { code: String(code), message: String(message) },
-    };
-}
-
+// Explanation: Unit tests for normalize() mapping success/failure and pending statuses.
 describe('Normalization', () => {
     test('success maps correctly', () => {
         const btResult = { success: true, transaction: { id: 'tx123', amount: '10.00', currencyIsoCode: 'EUR', status: 'settled' } };
