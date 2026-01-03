@@ -52,22 +52,27 @@ I focused on clear code, error handling, idempotency, normalized responses, and 
 ## 🧭 Architecture (At a Glance)
 
 ```
-                +----------------------------------+        +-------------------------------------+
-                |      Merchant Service (3001)     |        |   Payment Orchestrator (3002)       |
-                |                                  |        |                                     |
-Clients (UI) ==>| WebSocket: broadcasts status     |        |                                     |
-                |                                  |  REST  |  /orchestrator/sale                 |
-Clients (API) ->| REST:                             | -----> |  /orchestrator/refund               |
-                |  POST /merchant/payments         |        |  /orchestrator/void                 |
-                |  POST /merchant/refunds          |        |  GET  /orchestrator/metrics         |
-                |  POST /merchant/void             |        |                                     |
-                |  GET  /merchant/status/:ref      |        |                                     |
-                |  GET  /merchant/metrics          |        |                                     |
-                |                                  | <----- | Webhook (HTTP POST, normalized):    |
-                |  POST /merchant/callback         |        |  POST /merchant/callback            |
-                +----------------------------------+        +-------------------------------------+
+    +----------------------------------+        +-------------------------------------+
+    |      Merchant Service (3001)     |        |   Payment Orchestrator (3002)       |
+    |                                  |        |                                     |
+    |  POST /merchant/payments         |        |  /orchestrator/sale                 |
+    |  POST /merchant/refunds          |        |  /orchestrator/refund               |
+    |  POST /merchant/void             |        |  /orchestrator/void                 |
+    |  GET  /merchant/status/:ref      |        |  GET  /orchestrator/metrics         |
+    |  GET  /merchant/metrics          |        |                                     |
+    |                                  |        |                                     |
+    +----------------------------------+        +-------------------------------------+
 
-                           Payment Orchestrator  ── Braintree SDK (HTTPS) ──►  Braintree Sandbox
+Clients (UI) ================= WebSocket =====================> Merchant Service (3001)
+
+Clients (API) ------------------- REST -----------------------> Merchant Service (3001)
+                                                           
+Merchant Service (3001) ------------- REST ------------------> Payment Orchestrator (3002)
+
+Payment Orchestrator (3002) --- Webhook (HTTP POST, normalized) ---> Merchant Service (3001)
+           POST /merchant/callback
+
+         Payment Orchestrator  ── Braintree SDK (HTTPS) ──►  Braintree Sandbox
 ```
 
 | Component | Purpose | Key Endpoints / Interfaces |
