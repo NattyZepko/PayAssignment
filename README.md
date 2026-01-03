@@ -175,6 +175,117 @@ Invoke-RestMethod -Uri 'http://localhost:3001/merchant/payments' -Method Post -H
 curl http://localhost:3001/merchant/status/order_12345
 ```
 
+---
+
+## 🖨️ Sample Runs (Actual Output)
+
+The following outputs were captured from real runs on 2026‑01‑03 while both services were running locally on 3001/3002.
+
+Sale (POST /merchant/payments)
+
+```json
+{
+  "merchantReference": "order_demo_1001",
+  "provider": "braintree",
+  "operation": "sale",
+  "status": "PENDING",
+  "transactionId": "mxcs93ja",
+  "amount": "12.34",
+  "currency": "EUR"
+}
+```
+
+Status (GET /merchant/status/order_demo_1001)
+
+```json
+{
+  "merchantReference": "order_demo_1001",
+  "provider": "braintree",
+  "operation": "sale",
+  "status": "PENDING",
+  "transactionId": "mxcs93ja",
+  "amount": "12.34",
+  "currency": "EUR",
+  "savedAt": "2026-01-03T18:38:20.576Z"
+}
+```
+
+Void (POST /merchant/void)
+
+```json
+{
+  "merchantReference": "void_demo_1001",
+  "provider": "braintree",
+  "operation": "void",
+  "status": "SUCCESS",
+  "transactionId": "mxcs93ja",
+  "amount": "12.34",
+  "currency": "USD"
+}
+```
+
+Status after Void (GET /merchant/status/void_demo_1001)
+
+```json
+{
+  "merchantReference": "void_demo_1001",
+  "provider": "braintree",
+  "operation": "void",
+  "status": "SUCCESS",
+  "transactionId": "mxcs93ja",
+  "amount": "12.34",
+  "currency": "USD",
+  "savedAt": "2026-01-03T18:38:30.608Z"
+}
+```
+
+If you want, I can also include selected server log lines (trace IDs, webhook delivery) from the merchant and orchestrator processes. Share the relevant terminal output and I’ll add them here.
+
+---
+
+## 📜 Logs (Selected)
+
+The tables below summarize the key lines from the logs you shared for the real run on 2026‑01‑03.
+
+Merchant Service
+
+| Time | Trace ID | Merchant Ref | Status | Message |
+|---|---|---|---|---|
+| 1767465318201 | — | — | — | WebSocket server initialized |
+| 1767465318201 | — | — | — | Merchant Service listening on http://localhost:3001 |
+| 1767465500577 | aa43o6g9ysfjioi06vxua | order_demo_1001 | PENDING | callback received |
+| 1767465500587 | 29lxbopqv4q1jikau9h7o1 | order_demo_1001 | — | forwarded sale |
+| 1767465510608 | i5y1q08sf0oqor0bgxddf9 | void_demo_1001 | SUCCESS | callback received |
+
+Payment Orchestrator
+
+| Time | Trace ID | Merchant Ref | Idempotency | Txn Id | Message |
+|---|---|---|---|---|---|
+| 1767465342817 | — | — | — | — | Payment Orchestrator listening on http://localhost:3002 |
+| 1767465499111 | uuid-run-001 | order_demo_1001 | uuid-run-001 | — | sale: calling braintree |
+| 1767465500564 | uuid-run-001 | order_demo_1001 | — | mxcs93ja | sale: normalized |
+| 1767465509882 | uuid-run-void-001 | void_demo_1001 | uuid-run-void-001 | mxcs93ja | void: calling braintree |
+| 1767465510605 | uuid-run-void-001 | void_demo_1001 | — | mxcs93ja | void: normalized |
+
+Raw Logs (for reference)
+
+```text
+Merchant:
+{"level":30,"time":1767465318201,"pid":25796,"hostname":"Nati-pc","msg":"WebSocket server initialized"}
+{"level":30,"time":1767465318201,"pid":25796,"hostname":"Nati-pc","msg":"Merchant Service listening on http://localhost:3001"}
+{"level":30,"time":1767465500577,"pid":25796,"hostname":"Nati-pc","traceId":"aa43o6g9ysfjioi06vxua","merchantReference":"order_demo_1001","status":"PENDING","msg":"callback received"}
+{"level":30,"time":1767465500587,"pid":25796,"hostname":"Nati-pc","traceId":"29lxbopqv4q1jikau9h7o1","merchantReference":"order_demo_1001","msg":"forwarded sale"}
+{"level":30,"time":1767465510608,"pid":25796,"hostname":"Nati-pc","traceId":"i5y1q08sf0oqor0bgxddf9","merchantReference":"void_demo_1001","status":"SUCCESS","msg":"callback received"}
+
+Orchestrator:
+{"level":30,"time":1767465342817,"pid":3208,"hostname":"Nati-pc","msg":"Payment Orchestrator listening on http://localhost:3002"}
+{"level":30,"time":1767465499111,"pid":3208,"hostname":"Nati-pc","traceId":"uuid-run-001","merchantReference":"order_demo_1001","idempotencyKey":"uuid-run-001","msg":"sale: calling braintree"}
+{"level":30,"time":1767465500564,"pid":3208,"hostname":"Nati-pc","traceId":"uuid-run-001","merchantReference":"order_demo_1001","result":{"success":true,"id":"mxcs93ja"},"msg":"sale: normalized"}
+{"level":30,"time":1767465509882,"pid":3208,"hostname":"Nati-pc","traceId":"uuid-run-void-001","merchantReference":"void_demo_1001","idempotencyKey":"uuid-run-void-001","transactionId":"mxcs93ja","msg":"void: calling braintree"}
+{"level":30,"time":1767465510605,"pid":3208,"hostname":"Nati-pc","traceId":"uuid-run-void-001","merchantReference":"void_demo_1001","result":{"success":true,"id":"mxcs93ja"},"msg":"void: normalized"}
+```
+
+---
 ```powershell
 Invoke-RestMethod -Uri 'http://localhost:3001/merchant/status/order_12345' -Method Get | ConvertTo-Json -Depth 6
 ```
