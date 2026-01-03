@@ -6,6 +6,7 @@ import { saveStatus, getStatus } from './store.js';
 import { config } from './config.js';
 import { logger, genTraceId } from './logger.js';
 import { inc, getMetrics } from './metrics.js';
+import { initWebSocket, broadcastStatus } from './ws.js';
 
 dotenv.config();
 
@@ -112,6 +113,8 @@ app.post('/merchant/callback', (req, res) => {
     saveStatus(body.merchantReference, body);
     inc('callbacks_received');
     logger.info({ traceId: req.traceId, merchantReference: body.merchantReference, status: body.status }, 'callback received');
+    // Broadcast over WebSocket for real-time client updates
+    try { broadcastStatus(body); } catch { }
     res.status(200).json({ received: true });
 });
 
@@ -130,9 +133,10 @@ function cryptoRandom() {
 }
 
 if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
         logger.info(`Merchant Service listening on http://localhost:${PORT}`);
     });
+    initWebSocket(server);
 }
 
 export default app;
