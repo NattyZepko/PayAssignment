@@ -51,32 +51,28 @@ I built a two‑service system that integrates with Braintree Sandbox for Sale, 
 ## 🧭 Architecture (At a Glance)
 
 ```
-                     WebSocket (real‑time status)
-  +--------------------+   <==============================>   +---------------------------+
-  |       Clients      |                                      |   Merchant Service (3001) |
-  |    (Browser/UI)    |                                      |  Broadcasts to clients     |
-  +--------------------+                                      +---------------------------+
-        |   HTTP GET /merchant/status/:ref                              ^ Webhook (HTTP POST)
-        |   HTTP GET /merchant/metrics                                   | POST /merchant/callback
-        |                                                                 |
-        |   HTTP POST /merchant/payments                                  |
-        |   HTTP POST /merchant/refunds                                   |
-        |   HTTP POST /merchant/void                                      |
-        v                                                                 |
-  +---------------------------+----------------------------------------------+------------------+
-  |         Merchant (API)    |     HTTP POST /orchestrator/sale             |                  |
-  |                           |     HTTP POST /orchestrator/refund           |                  |
-  |                           |     HTTP POST /orchestrator/void             |                  |
-  +---------------------------+-----------------------------+----------------+                  |
-                                         |                                   |
-                                         |   HTTP GET /orchestrator/metrics  |
-                                         |                                   |
-                                         |   Braintree SDK (HTTPS)           |
-                                         v                                   |
-  +---------------------------+-----------------------------+----------------+------------------+
-  |     Payment Orchestrator  |              ->             |    Braintree   |      Sandbox     |
-  |            (3002)         |                            |                |                  |
-  +---------------------------+-----------------------------+----------------+------------------+
+Clients (UI)
+  ▲
+  │   WebSocket (real‑time status)
+  │ <==============================> Merchant Service (3001)
+  │                                  - broadcasts status
+  │
+  │   HTTP REST (to Merchant)
+  ├─ POST /merchant/payments
+  ├─ POST /merchant/refunds
+  ├─ POST /merchant/void
+  ├─ GET  /merchant/status/:ref
+  └─ GET  /merchant/metrics
+
+Merchant Service ──HTTP REST──► Payment Orchestrator (3002)
+  ├─ POST /orchestrator/sale
+  ├─ POST /orchestrator/refund
+  ├─ POST /orchestrator/void
+  └─ GET  /orchestrator/metrics
+
+Payment Orchestrator ──Webhook (HTTP POST, normalized)──► POST /merchant/callback
+
+Payment Orchestrator ──Braintree SDK (HTTPS)──► Braintree Sandbox
 ```
 
 | Component | Purpose | Key Endpoints / Interfaces |

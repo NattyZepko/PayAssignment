@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { ROUTES } from '../src/constants.js';
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 
 // Explanation: We mock Braintree and notify modules to isolate orchestrator behavior.
@@ -31,7 +32,7 @@ describe('Orchestrator endpoints', () => {
     // Explanation: Valid sale request returns normalized response and invokes notify.
     test('sale success (PENDING when submitted_for_settlement)', async () => {
         mockSale.mockResolvedValue({ success: true, transaction: { id: 'tx123', amount: '12.34', currencyIsoCode: 'EUR', status: 'submitted_for_settlement' } });
-        const res = await request(app).post('/orchestrator/sale').send({
+        const res = await request(app).post(ROUTES.sale).send({
             amount: '12.34',
             currency: 'EUR',
             paymentMethodNonce: 'fake-valid-nonce',
@@ -48,7 +49,7 @@ describe('Orchestrator endpoints', () => {
 
     // Explanation: Missing required fields cause 400 with clear error message.
     test('sale validation error (missing idempotencyKey)', async () => {
-        const res = await request(app).post('/orchestrator/sale').send({
+        const res = await request(app).post(ROUTES.sale).send({
             amount: '12.34',
             currency: 'EUR',
             paymentMethodNonce: 'nonce',
@@ -68,8 +69,8 @@ describe('Orchestrator endpoints', () => {
             merchantReference: 'order_2',
             idempotencyKey: 'uuid-2',
         };
-        const res1 = await request(app).post('/orchestrator/sale').send(payload);
-        const res2 = await request(app).post('/orchestrator/sale').send(payload);
+        const res1 = await request(app).post(ROUTES.sale).send(payload);
+        const res2 = await request(app).post(ROUTES.sale).send(payload);
         expect(res1.body.transactionId).toBe('tx123');
         expect(res2.body.transactionId).toBe('tx123');
         expect(mockSale).toHaveBeenCalledTimes(1);
@@ -78,7 +79,7 @@ describe('Orchestrator endpoints', () => {
     // Explanation: Refund success maps to SUCCESS and calls notify when provided.
     test('refund success', async () => {
         mockRefund.mockResolvedValue({ success: true, transaction: { id: 'cr123', type: 'credit', amount: '10.00' } });
-        const res = await request(app).post('/orchestrator/refund').send({
+        const res = await request(app).post(ROUTES.refund).send({
             transactionId: 'bt_txn_id_here',
             amount: '10.00',
             merchantReference: 'refund_1',
@@ -93,7 +94,7 @@ describe('Orchestrator endpoints', () => {
 
     // Explanation: Refund missing fields returns 400.
     test('refund validation error (missing idempotencyKey)', async () => {
-        const res = await request(app).post('/orchestrator/refund').send({
+        const res = await request(app).post(ROUTES.refund).send({
             transactionId: 'bt_txn',
             merchantReference: 'refund_1',
         });
@@ -110,7 +111,7 @@ describe('Orchestrator endpoints', () => {
         const mockVoidResult = { success: true, transaction: { id: 'tx123', status: 'voided' } };
         mockVoidTxn.mockResolvedValue(mockVoidResult);
 
-        const res = await request(app).post('/orchestrator/void').send({
+        const res = await request(app).post(ROUTES.void).send({
             transactionId: 'tx123',
             merchantReference: 'void_1',
             idempotencyKey: 'uuid-void-1',
@@ -123,7 +124,7 @@ describe('Orchestrator endpoints', () => {
     test('refund network error path', async () => {
         mockRefund.mockRejectedValueOnce(new Error('timeout'));
         mockRefund.mockRejectedValueOnce(new Error('timeout')); // ensure retry also fails
-        const res = await request(app).post('/orchestrator/refund').send({
+        const res = await request(app).post(ROUTES.refund).send({
             transactionId: 'bt_txn_id_here',
             amount: '10.00',
             merchantReference: 'refund_2',

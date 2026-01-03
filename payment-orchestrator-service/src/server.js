@@ -8,6 +8,7 @@ import { normalize } from './normalize.js';
 import { config } from './config.js';
 import { logger, genTraceId } from './logger.js';
 import { inc, getMetrics } from './metrics.js';
+import { ROUTES } from './constants.js';
 
 dotenv.config();
 
@@ -34,7 +35,7 @@ function required(body, fields) {
 
 // normalization moved to src/normalize.js
 
-app.post('/orchestrator/sale', async (req, res) => {
+app.post(ROUTES.sale, async (req, res) => {
     const error = required(req.body, ['amount', 'currency', 'paymentMethodNonce', 'merchantReference', 'idempotencyKey']);
     if (error) return res.status(400).json({ error });
 
@@ -78,7 +79,7 @@ app.post('/orchestrator/sale', async (req, res) => {
     }
 });
 
-app.post('/orchestrator/refund', async (req, res) => {
+app.post(ROUTES.refund, async (req, res) => {
     const error = required(req.body, ['transactionId', 'merchantReference', 'idempotencyKey']);
     if (error) return res.status(400).json({ error });
 
@@ -122,7 +123,7 @@ app.post('/orchestrator/refund', async (req, res) => {
     }
 });
 
-app.post('/orchestrator/void', async (req, res) => {
+app.post(ROUTES.void, async (req, res) => {
     const error = required(req.body, ['transactionId', 'merchantReference', 'idempotencyKey']);
     if (error) return res.status(400).json({ error });
 
@@ -165,7 +166,7 @@ app.post('/orchestrator/void', async (req, res) => {
     }
 });
 
-app.get('/orchestrator/metrics', (_req, res) => {
+app.get(ROUTES.metrics, (_req, res) => {
     res.status(200).json(getMetrics());
 });
 

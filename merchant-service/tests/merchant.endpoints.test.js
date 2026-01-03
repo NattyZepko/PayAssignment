@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { ORCH_ROUTES, MERCHANT_ROUTES } from '../src/constants.js';
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 
 // Explanation: We mock axios to control orchestrator responses and validate forwarding.
@@ -6,10 +7,10 @@ jest.unstable_mockModule('axios', () => ({
     default: {
         post: jest.fn((url, payload) => {
             // simulate orchestrator normalized response
-            if (url.endsWith('/orchestrator/sale')) {
+            if (url.endsWith(ORCH_ROUTES.sale)) {
                 return Promise.resolve({ data: { ...payload, provider: 'braintree', operation: 'sale', status: 'SUCCESS', transactionId: 'tx123' } });
             }
-            if (url.endsWith('/orchestrator/refund')) {
+            if (url.endsWith(ORCH_ROUTES.refund)) {
                 return Promise.resolve({ data: { ...payload, provider: 'braintree', operation: 'refund', status: 'SUCCESS', transactionId: 'cr123' } });
             }
             return Promise.reject(new Error('unknown'));
@@ -26,7 +27,7 @@ describe('Merchant endpoints', () => {
 
     // Explanation: /merchant/payments forwards payload, includes deviceData and idempotencyKey, and returns orchestrator response.
     test('payments forwards to orchestrator and returns normalized', async () => {
-        const res = await request(app).post('/merchant/payments').send({
+        const res = await request(app).post(MERCHANT_ROUTES.payments).send({
             amount: '12.34',
             currency: 'EUR',
             paymentMethodNonce: 'nonce',
@@ -43,7 +44,7 @@ describe('Merchant endpoints', () => {
 
     // Explanation: /merchant/refunds forwards payload and returns orchestrator response.
     test('refunds forwards to orchestrator and returns normalized', async () => {
-        const res = await request(app).post('/merchant/refunds').send({
+        const res = await request(app).post(MERCHANT_ROUTES.refunds).send({
             transactionId: 'bt_txn',
             amount: '10.00',
             merchantReference: 'refund_1',
@@ -61,13 +62,13 @@ describe('Merchant endpoints', () => {
     test('void forwards to orchestrator and returns normalized', async () => {
         const axiosModule = (await import('axios')).default;
         axiosModule.post = jest.fn((url, payload) => {
-            if (url.endsWith('/orchestrator/void')) {
+            if (url.endsWith(ORCH_ROUTES.void)) {
                 return Promise.resolve({ data: { ...payload, provider: 'braintree', operation: 'void', status: 'SUCCESS', transactionId: payload.transactionId } });
             }
             return Promise.reject(new Error('unknown'));
         });
 
-        const res = await request(app).post('/merchant/void').send({
+        const res = await request(app).post(MERCHANT_ROUTES.void).send({
             transactionId: 'tx123',
             merchantReference: 'void_1',
             idempotencyKey: 'uuid-void-1',
@@ -79,7 +80,7 @@ describe('Merchant endpoints', () => {
         expect(res.body.transactionId).toBe('tx123');
     });
     test('callback missing merchantReference returns 400', async () => {
-        const res = await request(app).post('/merchant/callback').send({ status: 'SUCCESS' });
+        const res = await request(app).post(MERCHANT_ROUTES.callback).send({ status: 'SUCCESS' });
         expect(res.status).toBe(400);
         expect(res.body.error).toContain('Missing merchantReference');
     });

@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { logger, genTraceId } from './logger.js';
 import { inc, getMetrics } from './metrics.js';
 import { initWebSocket, broadcastStatus } from './ws.js';
+import { MERCHANT_ROUTES, ORCH_ROUTES } from './constants.js';
 
 dotenv.config();
 
@@ -30,7 +31,7 @@ function required(body, fields) {
     return null;
 }
 
-app.post('/merchant/payments', async (req, res) => {
+app.post(MERCHANT_ROUTES.payments, async (req, res) => {
     const error = required(req.body, ['amount', 'currency', 'paymentMethodNonce', 'merchantReference']);
     if (error) return res.status(400).json({ error });
 
@@ -45,7 +46,7 @@ app.post('/merchant/payments', async (req, res) => {
     };
 
     try {
-        const resp = await axios.post(`${ORCHESTRATOR_BASE_URL}/orchestrator/sale`, payload, {
+        const resp = await axios.post(`${ORCHESTRATOR_BASE_URL}${ORCH_ROUTES.sale}`, payload, {
             headers: { 'Content-Type': 'application/json' },
             timeout: 15000,
         });
@@ -58,7 +59,7 @@ app.post('/merchant/payments', async (req, res) => {
     }
 });
 
-app.post('/merchant/refunds', async (req, res) => {
+app.post(MERCHANT_ROUTES.refunds, async (req, res) => {
     const error = required(req.body, ['transactionId', 'amount', 'merchantReference']);
     if (error) return res.status(400).json({ error });
 
@@ -71,7 +72,7 @@ app.post('/merchant/refunds', async (req, res) => {
     };
 
     try {
-        const resp = await axios.post(`${ORCHESTRATOR_BASE_URL}/orchestrator/refund`, payload, {
+        const resp = await axios.post(`${ORCHESTRATOR_BASE_URL}${ORCH_ROUTES.refund}`, payload, {
             headers: { 'Content-Type': 'application/json' },
             timeout: 15000,
         });
@@ -84,7 +85,7 @@ app.post('/merchant/refunds', async (req, res) => {
     }
 });
 
-app.post('/merchant/void', async (req, res) => {
+app.post(MERCHANT_ROUTES.void, async (req, res) => {
     const error = required(req.body, ['transactionId', 'merchantReference']);
     if (error) return res.status(400).json({ error });
 
@@ -96,7 +97,7 @@ app.post('/merchant/void', async (req, res) => {
     };
 
     try {
-        const resp = await axios.post(`${ORCHESTRATOR_BASE_URL}/orchestrator/void`, payload, {
+        const resp = await axios.post(`${ORCHESTRATOR_BASE_URL}${ORCH_ROUTES.void}`, payload, {
             headers: { 'Content-Type': 'application/json' },
             timeout: 15000,
         });
@@ -107,7 +108,7 @@ app.post('/merchant/void', async (req, res) => {
     }
 });
 
-app.post('/merchant/callback', (req, res) => {
+app.post(MERCHANT_ROUTES.callback, (req, res) => {
     const body = req.body || {};
     if (!body.merchantReference) return res.status(400).json({ error: 'Missing merchantReference' });
     saveStatus(body.merchantReference, body);
@@ -118,13 +119,13 @@ app.post('/merchant/callback', (req, res) => {
     res.status(200).json({ received: true });
 });
 
-app.get('/merchant/status/:merchantReference', (req, res) => {
+app.get(MERCHANT_ROUTES.status, (req, res) => {
     const status = getStatus(req.params.merchantReference);
     if (!status) return res.status(404).json({ error: 'Not found' });
     inc('status_queries');
     res.status(200).json(status);
 });
-app.get('/merchant/metrics', (_req, res) => {
+app.get(MERCHANT_ROUTES.metrics, (_req, res) => {
     res.status(200).json(getMetrics());
 });
 
