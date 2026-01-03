@@ -216,17 +216,6 @@ I implemented clear error mapping and a safe, single retry for transient issues.
 
 ---
 
-## 📈 Metrics I Expose
-
-I added simple counters on both services to make validation and demos easier.
-
-```bash
-curl http://localhost:3002/orchestrator/metrics
-curl http://localhost:3001/merchant/metrics
-```
-
----
-
 ## 🧠 Design Decisions (First‑Person)
 
 - I chose to export the Express apps (without `listen()` in tests) so Jest can mount routes cleanly.
@@ -258,12 +247,6 @@ cd merchant-service && npm test
 cd ../payment-orchestrator-service && npm test
 ```
 
-Key test files:
-
-- Merchant: https://github.com/NattyZepko/PayAssignment/blob/main/merchant-service/tests/merchant.test.js
-- Orchestrator unit normalize: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/tests/orchestrator.test.js
-- Orchestrator e2e: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/tests/orchestrator.e2e.test.js
-
 ---
 
 ## 📝 Notes I Kept While Building
@@ -272,39 +255,6 @@ Key test files:
 - Refunds require transactions to be settling/settled; I use `void` earlier in the lifecycle.
 - Secrets live in `.env`; `.env.example` shows what to set.
 - Idempotency TTL is ~15 minutes; reusing the same key returns the same normalized result.
-
----
-
-## ✅ Sample Callback Payloads
-
-Right after Sale, pending is normal:
-
-```json
-{
-  "merchantReference": "order_12345",
-  "provider": "braintree",
-  "operation": "sale",
-  "status": "PENDING",
-  "transactionId": "bt_txn_abc",
-  "amount": "12.34",
-  "currency": "EUR"
-}
-```
-
-On decline, I surface provider codes/messages:
-
-```json
-{
-  "merchantReference": "order_12345",
-  "provider": "braintree",
-  "operation": "sale",
-  "status": "FAILED",
-  "transactionId": "bt_txn_abc",
-  "amount": "12.34",
-  "currency": "EUR",
-  "error": { "code": "2005", "message": "Invalid Credit Card Number" }
-}
-```
 
 ---
 
