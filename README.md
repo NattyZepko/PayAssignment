@@ -18,7 +18,7 @@ I built a two‑service system that integrates with Braintree Sandbox for Sale, 
 
 ---
 
-<div align="right">
+<div align="left">
 
 <b>🔗 Quick Links</b>
 
