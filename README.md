@@ -18,6 +18,27 @@ I built a two‑service system that integrates with Braintree Sandbox for Sale, 
 
 ---
 
+<div align="right">
+
+<b>🔗 Quick Links</b>
+
+- Merchant Service
+  - Server: https://github.com/NattyZepko/PayAssignment/blob/main/merchant-service/src/server.js
+  - Config: https://github.com/NattyZepko/PayAssignment/blob/main/merchant-service/src/config.js
+  - Store: https://github.com/NattyZepko/PayAssignment/blob/main/merchant-service/src/store.js
+  - Tests: https://github.com/NattyZepko/PayAssignment/blob/main/merchant-service/tests/merchant.test.js
+
+- Payment Orchestrator
+  - Server: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/src/server.js
+  - Normalize: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/src/normalize.js
+  - Idempotency: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/src/idempotency.js
+  - Braintree client: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/src/braintree.js
+  - E2E tests: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/tests/orchestrator.e2e.test.js
+
+</div>
+
+---
+
 ## ✍️ Why I Designed It This Way
 
 - I decided to split responsibilities into two small services so the merchant API stays simple and the orchestration layer handles provider quirks, retries, and normalization.
@@ -41,22 +62,7 @@ Merchant Service (3001) ──► Payment Orchestrator (3002) ──► Braintre
 
 ---
 
-## 🔗 Useful Source Links
 
-- Merchant Service
-  - Server: https://github.com/NattyZepko/PayAssignment/blob/main/merchant-service/src/server.js
-  - Config: https://github.com/NattyZepko/PayAssignment/blob/main/merchant-service/src/config.js
-  - Store: https://github.com/NattyZepko/PayAssignment/blob/main/merchant-service/src/store.js
-  - Tests (callbacks & endpoints): https://github.com/NattyZepko/PayAssignment/blob/main/merchant-service/tests/merchant.test.js
-
-- Payment Orchestrator
-  - Server: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/src/server.js
-  - Normalize: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/src/normalize.js
-  - Idempotency (LRU): https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/src/idempotency.js
-  - Braintree client: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/src/braintree.js
-  - E2E tests: https://github.com/NattyZepko/PayAssignment/blob/main/payment-orchestrator-service/tests/orchestrator.e2e.test.js
-
----
 
 ## ⚙️ Setup & Run
 
@@ -216,25 +222,17 @@ I implemented clear error mapping and a safe, single retry for transient issues.
 
 ---
 
-## 🧠 Design Decisions (First‑Person)
+## 🧩 Design & Extensibility (Compact Table)
 
-- I chose to export the Express apps (without `listen()` in tests) so Jest can mount routes cleanly.
-- I extracted config, constants, normalization, idempotency, notify, logging, and metrics into small modules so the server stays readable.
-- I wired a per‑request trace ID (from `x-request-id` or the idempotency key) to correlate logs across services.
-- I stored merchant status in memory to keep the demo simple; I kept the structure easy to swap for a DB or Redis later.
-- I added `void` because refunds only work once a transaction is settling/settled; `void` is the right tool beforehand.
-
----
-
-## 🧩 Project Structure & Extensibility
-
-| Area | What I Did | How to Extend |
-|---|---|---|
-| Transport | Webhook POST to merchant callback | Add WebSocket or polling |
-| Idempotency | LRU cache with TTL keyed by `idempotencyKey` | Move to Redis for cross‑instance caching |
-| Persistence | In‑memory status store on merchant | Swap to DB/Redis |
-| Validation | Basic runtime checks | Add schema validation (e.g., Zod) |
-| Observability | Pino logs + trace IDs; HTTP metrics endpoints | Hook to OpenTelemetry + Prometheus |
+| Area | Decision I Made | Why | How to Extend |
+|---|---|---|---|
+| Transport | Webhook POST to merchant callback | Keeps services decoupled; async completion | Add WebSocket or polling |
+| Idempotency | LRU cache with TTL keyed by idempotencyKey | Payments must be safe to retry | Redis for cross‑instance caching |
+| Persistence | In‑memory merchant status store | Simple demo; easy to swap later | DB/Redis store |
+| Validation | Basic runtime checks | Focused on flow clarity | Zod schemas + typed errors |
+| Observability | Pino logs + per‑request trace IDs; HTTP metrics | Easy debugging and monitoring | OpenTelemetry + Prometheus |
+| App Export | Export Express apps (skip `listen()` in tests) | Testable servers in Jest | Supertest & CI integration |
+| Refund/Void | Added `void` pre‑settlement; `refund` post‑settlement | Aligns with provider lifecycle | More operations (dispute, partial capture) |
 
 ---
 
