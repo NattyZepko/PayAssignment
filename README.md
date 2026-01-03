@@ -134,10 +134,12 @@ PORT=3001
 
 ```bash
 # Terminal 1
-cd merchant-service && npm run dev
+cd merchant-service
+npm run dev
 
 # Terminal 2
-cd payment-orchestrator-service && npm run dev
+cd payment-orchestrator-service 
+npm run dev
 ```
 
 ---
@@ -179,7 +181,7 @@ curl http://localhost:3001/merchant/status/order_12345
 
 ## 🖨️ Sample Runs (Actual Output)
 
-The following outputs were captured from real runs on 2026‑01‑03 while both services were running locally on 3001/3002.
+The following outputs were captured from real runs on 2026‑01‑03 while both services were running locally on 3001/3002:
 
 Sale (POST /merchant/payments)
 
@@ -239,13 +241,12 @@ Status after Void (GET /merchant/status/void_demo_1001)
 }
 ```
 
-If you want, I can also include selected server log lines (trace IDs, webhook delivery) from the merchant and orchestrator processes. Share the relevant terminal output and I’ll add them here.
 
 ---
 
 ## 📜 Logs (Selected)
 
-The tables below summarize the key lines from the logs you shared for the real run on 2026‑01‑03.
+The tables below summarize key lines from logs captured during a real run on 2026‑01‑03.
 
 Merchant Service
 
@@ -339,7 +340,7 @@ Invoke-RestMethod -Uri 'http://localhost:3001/merchant/status/void_987' -Method 
 
 ## 📦 Normalized Response Schema
 
-I return a consistent shape so the client can handle outcomes uniformly.
+We return a consistent shape so the client can handle outcomes uniformly.
 
 ```json
 {
@@ -390,21 +391,11 @@ I implemented clear error mapping and a safe, single retry for transient issues.
 
 ---
 
-## 🔒 Security
-
-- Webhook authenticity: I plan to sign webhook payloads (HMAC) and verify signatures on the merchant to prevent spoofing.
-- IP allowlisting: I can restrict inbound orchestrator webhook IPs to a known set in production.
-- TLS everywhere: All HTTP traffic should be over TLS in production; Sandbox keeps demo simple.
-- Secret management: I keep credentials in `.env` locally; in production I’d use a secret manager.
-
----
-
 ## ⚠️ Known Limitations
 
-- In‑memory stores: Merchant status and idempotency cache are in memory; they won’t persist across restarts.
+- In‑memory stores: Merchant status and idempotency cache are in memory; they won’t persist across restarts. These would be ideally kept in a DB.
 - Single instance: Idempotency LRU is process‑local; horizontally scaled instances need Redis.
-- Sandbox assumptions: Flows assume Sandbox behaviors; production nuances (timeouts, backoff) may differ.
-- Validation: I use basic runtime checks; I can add Zod schemas for stricter payload validation.
+- Sandbox assumptions: Flows assume Sandbox behaviors; production nuances (timeouts, backoff) may obviously differ.
 
 ---
 
@@ -417,18 +408,6 @@ cd merchant-service && npm test
 cd ../payment-orchestrator-service && npm test
 ```
 
----
 
-## 📝 Notes I Kept While Building
 
-- Device data is optional; `paymentMethodNonce` is required for Sale.
-- Refunds require transactions to be settling/settled; I use `void` earlier in the lifecycle.
-- Secrets live in `.env`; `.env.example` shows what to set.
-- Idempotency TTL is ~15 minutes; reusing the same key returns the same normalized result.
-
----
-
-## 🙌 Wrap‑Up
-
-I built this to be straightforward to read, easy to test, and friendly to run locally. If you want, I can add schema validation, Docker Compose, or CI next.
 
