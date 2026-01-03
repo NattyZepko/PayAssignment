@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚀 My Braintree Payment Orchestrator
+# Natty's Braintree Payment Orchestrator
 
 <br/>
 
@@ -12,7 +12,8 @@
 
 <br/>
 
-I built a two‑service system that integrates with Braintree Sandbox for Sale, Refund, and Void for Pay.com exam. I focused on clear code, error handling, idempotency, normalized responses, and clearly logged metrics.
+I built a two‑service system that integrates with Braintree Sandbox for Sale, Refund, and Void for Pay.com exam.
+I focused on clear code, error handling, idempotency, normalized responses, and clearly logged metrics.
 
 </div>
 
@@ -51,28 +52,22 @@ I built a two‑service system that integrates with Braintree Sandbox for Sale, 
 ## 🧭 Architecture (At a Glance)
 
 ```
-Clients (UI)
-  ▲
-  │   WebSocket (real‑time status)
-  │ <==============================> Merchant Service (3001)
-  │                                  - broadcasts status
-  │
-  │   HTTP REST (to Merchant)
-  ├─ POST /merchant/payments
-  ├─ POST /merchant/refunds
-  ├─ POST /merchant/void
-  ├─ GET  /merchant/status/:ref
-  └─ GET  /merchant/metrics
+                +----------------------------------+        +-------------------------------------+
+                |      Merchant Service (3001)     |        |   Payment Orchestrator (3002)       |
+                |                                  |        |                                     |
+Clients (UI) ==>| WebSocket: broadcasts status     |        |                                     |
+                |                                  |  REST  |  /orchestrator/sale                 |
+Clients (API) ->| REST:                             | -----> |  /orchestrator/refund               |
+                |  POST /merchant/payments         |        |  /orchestrator/void                 |
+                |  POST /merchant/refunds          |        |  GET  /orchestrator/metrics         |
+                |  POST /merchant/void             |        |                                     |
+                |  GET  /merchant/status/:ref      |        |                                     |
+                |  GET  /merchant/metrics          |        |                                     |
+                |                                  | <----- | Webhook (HTTP POST, normalized):    |
+                |  POST /merchant/callback         |        |  POST /merchant/callback            |
+                +----------------------------------+        +-------------------------------------+
 
-Merchant Service ──HTTP REST──► Payment Orchestrator (3002)
-  ├─ POST /orchestrator/sale
-  ├─ POST /orchestrator/refund
-  ├─ POST /orchestrator/void
-  └─ GET  /orchestrator/metrics
-
-Payment Orchestrator ──Webhook (HTTP POST, normalized)──► POST /merchant/callback
-
-Payment Orchestrator ──Braintree SDK (HTTPS)──► Braintree Sandbox
+                           Payment Orchestrator  ── Braintree SDK (HTTPS) ──►  Braintree Sandbox
 ```
 
 | Component | Purpose | Key Endpoints / Interfaces |
