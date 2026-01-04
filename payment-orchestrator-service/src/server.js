@@ -33,8 +33,6 @@ function required(body, fields) {
     return null;
 }
 
-// normalization moved to src/normalize.js
-
 app.post(ROUTES.sale, async (req, res) => {
     const error = required(req.body, ['amount', 'currency', 'paymentMethodNonce', 'merchantReference', 'idempotencyKey']);
     if (error) return res.status(400).json({ error });
