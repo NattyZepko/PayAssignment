@@ -56,8 +56,6 @@ describe('Merchant endpoints', () => {
         expect(res.body.operation).toBe('refund');
     });
 
-    // Explanation: /merchant/callback requires merchantReference; missing returns 400.
-
     // Explanation: /merchant/void forwards payload and returns orchestrator response.
     test('void forwards to orchestrator and returns normalized', async () => {
         const axiosModule = (await import('axios')).default;
